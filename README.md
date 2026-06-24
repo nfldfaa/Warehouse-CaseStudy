@@ -8,7 +8,6 @@ Studi kasus perancangan database untuk sistem manajemen **warehouse & logistics*
 
 ## 📋 Daftar Isi
 
-- [Struktur Folder](#-struktur-folder)
 - [Entity Relationship Diagram](#-entity-relationship-diagram)
 - [Cara Menjalankan](#-cara-menjalankan)
 - [Catatan Validasi Teknis](#-catatan-validasi-teknis)
@@ -21,20 +20,6 @@ Studi kasus perancangan database untuk sistem manajemen **warehouse & logistics*
 - [Soal 7 — Diagnosis & Optimasi Skala Besar](#soal-7--diagnosis--optimasi-skala-besar)
 - [Soal 8 — Rancangan Arsitektur Database](#soal-8--rancangan-arsitektur-database)
 
----
-
-## 📁 Struktur Folder
-
-```
-warehouse-logistics-database/
-├── README.md
-└── sql/
-    ├── 01_schema.sql      # CREATE TABLE + relasi FK + sample data
-    ├── 02_views.sql       # Semua VIEW untuk dashboard & laporan (Soal 2-8)
-    └── 03_indexes.sql     # Semua INDEX untuk optimasi performa (Soal 2-8)
-```
-
-Ketiga file SQL sudah **divalidasi** dapat berjalan berurutan tanpa error di MariaDB 10.11 / MySQL, menghasilkan 10 tabel, 12 VIEW, dan 17 INDEX.
 
 ---
 
