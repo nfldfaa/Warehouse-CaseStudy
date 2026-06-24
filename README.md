@@ -119,9 +119,9 @@ erDiagram
 
 ### Via terminal (MySQL/MariaDB CLI)
 ```bash
-mysql -u root -p < sql/01_schema.sql
-mysql -u root -p warehouse_logistics_db < sql/02_views.sql
-mysql -u root -p warehouse_logistics_db < sql/03_indexes.sql
+mysql -u root -p < 01_schema.sql
+mysql -u root -p warehouse_logistics_db < 02_views.sql
+mysql -u root -p warehouse_logistics_db < 03_indexes.sql
 ```
 
 ---
@@ -156,11 +156,11 @@ mysql -u root -p warehouse_logistics_db < sql/03_indexes.sql
 
 **a. Tabel:** `pengiriman`, `kurir`, `detail_pengiriman`, `produk`
 
-**b-c. Query & VIEW** — lihat [`sql/02_views.sql`](sql/02_views.sql): `vw_pengiriman_harian`, `vw_produk_terkirim_harian`
+**b-c. Query & VIEW** — lihat [`02_views.sql`](02_views.sql): `vw_pengiriman_harian`, `vw_produk_terkirim_harian`
 
 > ⚠️ Query contoh di bawah memakai pola `tanggal_pengiriman >= CURDATE() AND tanggal_pengiriman < CURDATE() + INTERVAL 1 DAY`, **bukan** `WHERE DATE(tanggal_pengiriman) = CURDATE()` — lihat [Catatan Validasi Teknis](#-catatan-validasi-teknis) untuk bukti EXPLAIN mengapa ini penting.
 
-**d-e. Index & alasan** — lihat [`sql/03_indexes.sql`](sql/03_indexes.sql):
+**d-e. Index & alasan** — lihat [`03_indexes.sql`](03_indexes.sql):
 - `idx_pengiriman_tanggal` — filter rentang tanggal hari ini di semua metrik (terbukti dipakai lewat EXPLAIN, lihat catatan validasi)
 - `idx_pengiriman_status`, `idx_pengiriman_kota_tujuan` — kolom `GROUP BY`
 - `idx_pengiriman_kurir` — FK join ke kurir
@@ -191,7 +191,7 @@ WHERE s.nama_status = 'Sampai';
 
 **a. Tabel:** `gudang`, `stok_gudang`, `produk`
 
-**b. VIEW:** [`vw_laporan_gudang`](sql/02_views.sql) — total stok, jumlah produk unik, dan utilisasi (`total_stok / kapasitas`) per gudang dalam satu view (pakai `LEFT JOIN` agar gudang kosong tetap tampil).
+**b. VIEW:** [`vw_laporan_gudang`](02_views.sql) — total stok, jumlah produk unik, dan utilisasi (`total_stok / kapasitas`) per gudang dalam satu view (pakai `LEFT JOIN` agar gudang kosong tetap tampil).
 
 **c-d. Index & dampak:** `idx_stok_gudang_komposit (gudang_id, produk_id)` mengubah agregasi dari *full scan* O(n) menjadi *index seek* mendekati O(log n), sekaligus mempercepat `COUNT(DISTINCT produk_id)` karena data sudah terurut di B-Tree index.
 
@@ -201,7 +201,7 @@ WHERE s.nama_status = 'Sampai';
 
 **a. Tabel:** `pelanggan`, `pengiriman`, `detail_pengiriman`
 
-**b-c. VIEW:** [`vw_pelanggan_prioritas`](sql/02_views.sql) — total pengiriman, total item terkirim, dan aktivitas 30 hari terakhir per pelanggan, dipakai ulang oleh tim BI.
+**b-c. VIEW:** [`vw_pelanggan_prioritas`](02_views.sql) — total pengiriman, total item terkirim, dan aktivitas 30 hari terakhir per pelanggan, dipakai ulang oleh tim BI.
 
 **d. Index:** `idx_pengiriman_pelanggan_tanggal (pelanggan_id, tanggal_pengiriman)` — composite, mendukung filter per pelanggan **dan** rentang tanggal sekaligus.
 
@@ -211,7 +211,7 @@ WHERE s.nama_status = 'Sampai';
 
 Skala: **5 juta pengiriman, 20 juta data tracking**.
 
-**a. VIEW:** [`vw_monitoring_realtime`](sql/02_views.sql) — mengambil status terkini langsung dari kolom `pengiriman.status_pengiriman` (bukan window function ke seluruh tabel tracking), waktu update lewat subquery `MAX()` yang sempit per `pengiriman_id`.
+**a. VIEW:** [`vw_monitoring_realtime`](02_views.sql) — mengambil status terkini langsung dari kolom `pengiriman.status_pengiriman` (bukan window function ke seluruh tabel tracking), waktu update lewat subquery `MAX()` yang sempit per `pengiriman_id`.
 
 **c-d. Index kunci:** `idx_tracking_pengiriman_waktu (pengiriman_id, waktu_update)` berfungsi sebagai **covering index** untuk subquery `MAX(waktu_update)`, sehingga tabel tracking 20 juta baris tidak perlu disentuh langsung untuk setiap baris monitoring.
 
@@ -223,9 +223,9 @@ Skala: **1 juta pelanggan, 500 ribu produk, 10 juta pengiriman, 50 juta tracking
 
 **a. Penyebab utama:** tidak ada index pada kolom filter (`pelanggan_id`, `tanggal_pengiriman`), `SELECT *` tanpa pagination, VIEW dihitung ulang setiap panggilan, tidak ada partisi tabel pada `tracking_pengiriman`.
 
-**b. VIEW:** [`vw_histori_pengiriman_pelanggan`](sql/02_views.sql) — wajib dipanggil dengan filter + `LIMIT`, bukan tanpa batas.
+**b. VIEW:** [`vw_histori_pengiriman_pelanggan`](02_views.sql) — wajib dipanggil dengan filter + `LIMIT`, bukan tanpa batas.
 
-**c-e.** Minimal 5 index (lihat [`sql/03_indexes.sql`](sql/03_indexes.sql)) diperkirakan menurunkan waktu eksekusi dari >5 menit ke kisaran **ratusan ms – beberapa detik**, dengan trade-off overhead kecil pada `INSERT`/`UPDATE`. Untuk pertumbuhan lebih jauh, disarankan tambahan **table partitioning** per bulan/tahun dan **archiving** data lama.
+**c-e.** Minimal 5 index (lihat [`03_indexes.sql`](03_indexes.sql)) diperkirakan menurunkan waktu eksekusi dari >5 menit ke kisaran **ratusan ms – beberapa detik**, dengan trade-off overhead kecil pada `INSERT`/`UPDATE`. Untuk pertumbuhan lebih jauh, disarankan tambahan **table partitioning** per bulan/tahun dan **archiving** data lama.
 
 ---
 
@@ -233,8 +233,8 @@ Skala: **1 juta pelanggan, 500 ribu produk, 10 juta pengiriman, 50 juta tracking
 
 Sebagai *Database Architect*, dirancang 4 dashboard (operasional, gudang, kurir, pelanggan) dengan:
 
-- **VIEW:** `vw_dashboard_operasional`, `vw_dashboard_gudang`, `vw_dashboard_kurir`, `vw_dashboard_pelanggan` (lihat [`sql/02_views.sql`](sql/02_views.sql))
-- **Index:** 7 index inti (lihat [`sql/03_indexes.sql`](sql/03_indexes.sql))
+- **VIEW:** `vw_dashboard_operasional`, `vw_dashboard_gudang`, `vw_dashboard_kurir`, `vw_dashboard_pelanggan` (lihat [`02_views.sql`](02_views.sql))
+- **Index:** 7 index inti (lihat [`03_indexes.sql`](03_indexes.sql))
 - **Query JOIN 4+ tabel:** laporan detail pengiriman lengkap (5 tabel), laporan stok dengan supplier (4 tabel), histori pengiriman lengkap (5 tabel)
 
 **Hubungan VIEW, JOIN, dan INDEX:**
