@@ -9,8 +9,6 @@ Studi kasus perancangan database untuk sistem manajemen **warehouse & logistics*
 ## 📋 Daftar Isi
 
 - [Entity Relationship Diagram](#-entity-relationship-diagram)
-- [Cara Menjalankan](#-cara-menjalankan)
-- [Catatan Validasi Teknis](#-catatan-validasi-teknis)
 - [Soal 1 — Tabel Relasi](#soal-1--tabel-relasi)
 - [Soal 2 — Dashboard Harian](#soal-2--dashboard-harian)
 - [Soal 3 — Evaluasi Performa Pengiriman](#soal-3--evaluasi-performa-pengiriman)
@@ -127,38 +125,6 @@ mysql -u root -p warehouse_logistics_db < sql/03_indexes.sql
 ```
 
 ---
-
-## ✅ Catatan Validasi Teknis
-
-Seluruh skrip di repo ini **sudah diuji nyata** di MariaDB 10.11 (bukan hanya ditulis manual), termasuk audit dengan `EXPLAIN` dan uji constraint. Berikut temuan & perbaikan yang dilakukan:
-
-### 🐛 Bug ditemukan & diperbaiki: anti-pattern `DATE(kolom) = CURDATE()`
-Versi awal `vw_pengiriman_harian`, `vw_produk_terkirim_harian`, dan `vw_dashboard_operasional` memfilter dengan `WHERE DATE(tanggal_pengiriman) = CURDATE()`. Setelah diuji dengan `EXPLAIN` pada data sebanyak ±20.000 baris:
-
-| Versi Query | `key` (index dipakai) | Baris di-scan | Waktu |
-|---|---|---|---|
-| `WHERE DATE(tanggal_pengiriman) = CURDATE()` | **NULL** (tidak ada) | 20.004 (semua) | ~4.5 ms |
-| `WHERE tanggal_pengiriman >= CURDATE() AND tanggal_pengiriman < CURDATE() + INTERVAL 1 DAY` | `idx_pengiriman_tanggal` | 339 | ~0.4 ms |
-
-**Penyebab:** membungkus kolom yang sudah diindeks dengan fungsi (`DATE()`, `YEAR()`, dll di sisi kolom) membuat MySQL/MariaDB **tidak bisa** memakai index B-Tree sama sekali, karena nilai hasil fungsi tidak tersimpan di struktur index. Index hanya bisa dipakai kalau kolom mentahnya dibandingkan langsung. **Sudah diperbaiki** di ketiga VIEW pada `sql/02_views.sql` — sekarang memakai perbandingan rentang (`>=` dan `<`) yang terbukti >10x lebih cepat dan benar-benar memakai `idx_pengiriman_tanggal`.
-
-### 🔒 Tambahan: CHECK constraint untuk cegah divide-by-zero
-Ditemukan saat uji edge case: jika ada gudang dengan `kapasitas = 0`, kolom `utilisasi_persen` di `vw_laporan_gudang` menghasilkan `NULL` (MySQL/MariaDB tidak error saat dibagi 0, tapi diam-diam jadi `NULL`) — berisiko disalahartikan dashboard sebagai "tidak ada data". **Ditambahkan** `CHECK (kapasitas > 0)` pada tabel `gudang` di `sql/01_schema.sql` agar data tidak valid ditolak sejak di level database.
-
-### 🧪 Pengujian integritas referensial (FK)
-| Skenario | Hasil |
-|---|---|
-| Insert `pengiriman` dengan `kurir_id` yang tidak ada | ❌ Ditolak (`ERROR 1452` — FK constraint) |
-| Hapus `pelanggan` yang masih punya `pengiriman` | ❌ Ditolak (`ERROR 1451` — `ON DELETE RESTRICT`) |
-| Hapus `gudang` yang masih punya `stok_gudang` | ✅ Berhasil, baris `stok_gudang` terkait otomatis ikut terhapus (`ON DELETE CASCADE`) |
-| Insert `gudang` dengan `kapasitas = 0` | ❌ Ditolak (`CHECK constraint`) |
-
-### 📌 Catatan tambahan (insight, bukan bug)
-- InnoDB **otomatis membuat index** untuk kolom FK yang belum punya index sebagai kolom paling kiri (contoh: `fk_tracking_status` pada `tracking_pengiriman.status_id`, `fk_produk_supplier` pada `produk.supplier_id`). Index manual yang sudah dibuat di `03_indexes.sql` tetap relevan karena kebanyakan berbentuk *composite* yang tidak otomatis dibuat InnoDB.
-- Pola `SUM(kolom = 'nilai')` untuk menghitung persentase (dipakai di `vw_performa_kurir`) memanfaatkan perilaku MySQL/MariaDB yang mengonversi hasil boolean menjadi `1`/`0`. Ini **spesifik MySQL/MariaDB** — tidak portable langsung ke PostgreSQL/SQL Server tanpa `CASE WHEN`.
-- Hasil EXPLAIN untuk `vw_monitoring_realtime` (Soal 6) dikonfirmasi memakai `idx_pengiriman_status` untuk filter status aktif, dan `idx_tracking_pengiriman_waktu` sebagai *covering index* untuk subquery `MAX(waktu_update)` — sesuai rancangan awal.
-
-
 
 | Tabel "1" | Tabel "N" | FK | Tipe Relasi |
 |---|---|---|---|
